@@ -1,0 +1,10 @@
+node_modules/
+snapshot/
+dist/
+.*.wp-snapshot-*/
+coverage/
+.env*
+.npmrc
+*.log
+*.tgz
+.DS_Store
