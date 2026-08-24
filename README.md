@@ -1,30 +1,69 @@
 # wp-snapshot
 
-`wp-snapshot` exports the public side of a WordPress site as static HTML and assets.
+[![CI](https://github.com/f/wp-snapshot/actions/workflows/ci.yml/badge.svg)](https://github.com/f/wp-snapshot/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/wp-snapshot.svg)](https://www.npmjs.com/package/wp-snapshot)
+[![Node.js](https://img.shields.io/node/v/wp-snapshot.svg)](https://www.npmjs.com/package/wp-snapshot)
+[![MIT License](https://img.shields.io/npm/l/wp-snapshot.svg)](LICENSE)
 
-It does not need a WordPress plugin or an admin account. Before the export starts, it uses WordPress's public REST API discovery link and API index to confirm that the URL is really backed by WordPress. It then reads WordPress sitemaps, crawls the public HTML, downloads the assets, and changes captured links to relative file paths.
+Export a public WordPress site as static HTML, CSS, JavaScript, images, fonts, and other assets. Captured links are rewritten to relative file paths, so the output can be deployed at a domain root or under a subpath on a static host.
 
 ```bash
 npx wp-snapshot https://example.com --output snapshot
 ```
 
-The generated folder can be opened from disk or deployed under any URL path. A link such as `/about/` becomes a real relative file reference such as `./about/index.html`. Nested pages, CSS assets, query URLs, redirects, and fragments are handled in the same way.
+No WordPress plugin or admin account is required. By default, `wp-snapshot` checks for WordPress through its REST API before it starts crawling. Pages are discovered from fetched, server-rendered HTML and sitemaps. The REST API is used only for preflight verification.
 
-## Install
+> `wp-snapshot` is at an early `0.1.x` release. Check the generated site before switching production traffic to it.
+
+## Quick start
 
 Node.js 22.12 or newer is required.
 
 ```bash
-npm install --global wp-snapshot
+npx wp-snapshot https://example.com --output snapshot
 ```
 
-You can also run it without a global install:
+Test the result through a local HTTP server:
+
+```bash
+npx serve snapshot
+```
+
+Then deploy the `snapshot/` directory to your static host.
+
+## How it works
+
+1. Check the WordPress REST API discovery link and core `wp/v2` routes.
+2. Read `robots.txt`, WordPress sitemaps, and links in fetched HTML.
+3. Download discovered pages and assets within the configured limits.
+4. Rewrite captured HTML, CSS, manifest, import-map, and module references.
+5. Write everything into a temporary directory first.
+6. Replace the output directory only after the snapshot is ready.
+
+`wp-snapshot` is an HTTP crawler. It parses HTML but does not open a browser or execute page JavaScript.
+
+## Installation
+
+Run the CLI without installing it globally:
 
 ```bash
 npx wp-snapshot https://example.com
 ```
 
-## Usage
+Or install the command globally:
+
+```bash
+npm install --global wp-snapshot
+wp-snapshot https://example.com
+```
+
+Install it in a Node.js project to use the JavaScript API:
+
+```bash
+npm install wp-snapshot
+```
+
+## CLI usage
 
 ```text
 wp-snapshot <url> [options]
@@ -48,50 +87,25 @@ wp-snapshot <url> [options]
     --no-report               Do not write wp-snapshot.json
     --verbose                 Print every captured resource
     --quiet                   Print only errors
+-h, --help                    Show help
+-v, --version                 Show the version
 ```
 
-`wp-snapshot` will not remove an existing non-empty output directory unless you pass `--clean`. Normal clean runs only replace folders created by an earlier `wp-snapshot` run. Use `--force-clean` for a different folder. Version-control roots, your home folder, the current folder, and its parents are always refused. The tool first writes into a temporary folder and replaces the target only after the snapshot is ready.
+Run `wp-snapshot --help` to check the options supported by your installed version.
 
-## WordPress verification
+## Common examples
 
-The check follows the [official WordPress REST API discovery method](https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/). It reads the `rel="https://api.w.org/"` HTTP or HTML link from the first page, then validates the advertised API index. If the page does not advertise one, it tries `/wp-json/` and the plain-permalink `?rest_route=/` form. A valid index must contain the core `wp/v2` namespace and routes.
-
-`wp-admin` is not used for detection. A login redirect is not a reliable way to identify WordPress, and some sites hide or move it.
-
-Some security plugins and firewalls disable the public REST API. If you already know the source is WordPress, bypass only this preflight check:
+### Replace a previous snapshot
 
 ```bash
-wp-snapshot https://wordpress.example --skip-wordpress-check
+wp-snapshot https://example.com --output snapshot --clean
 ```
 
-The library equivalent is `skipWordPressCheck: true`. The report records whether WordPress was verified through the REST API or the check was skipped.
+Normal `--clean` runs replace only directories created by an earlier `wp-snapshot` run. Use `--force-clean` when you intentionally want to replace a different directory. Git repositories, your home directory, the current directory, and its parents are always refused.
 
-## What it captures
+### Set the final deployment URL
 
-- Posts, pages, archives, pagination, and other public HTML found in links or sitemaps
-- Pretty permalinks and query permalinks such as `?p=42`
-- The active WordPress 404 page as `404.html`
-- Theme, plugin, upload, and WordPress core assets
-- Images from `src`, `srcset`, and common lazy-loading attributes
-- Stylesheets, nested CSS imports, fonts, CSS images, scripts, modules, icons, media, and web manifests
-- External subresources such as CDN images and fonts when `--external-assets` is enabled, without crawling external websites
-- Redirect aliases, fragments, `<base href>`, inline styles, import maps, and cache-busting query strings
-
-The tool reads `robots.txt`, native `/wp-sitemap.xml`, plain-permalink `?sitemap=index`, and common sitemap locations. Use `--ignore-robots` only for a site you control.
-
-Same-origin assets are always captured. External assets stay remote by default. Use `--external-assets` when you also want public CDN files, remote fonts, and other cross-origin subresources. Private and local network targets are blocked unless you also pass `--allow-private-network`.
-
-## Static does not mean every WordPress feature works
-
-The output contains static files. PHP and MySQL are not part of it.
-
-Comments, search, login, preview links, forms, WooCommerce carts and checkout, admin AJAX, and REST-driven blocks still need a live server. `wp-snapshot` excludes known admin and dynamic crawl targets. It keeps form actions pointed at the source site and lists remaining live URLs in `wp-snapshot.json`.
-
-Static ES module imports and string-based dynamic imports are captured and rewritten. Other JavaScript is copied without trying to change arbitrary strings inside the code. Calculated imports, worker URLs, and runtime API calls can still need the original WordPress site.
-
-## Canonical URLs
-
-By default, copied canonical and `og:url` tags are removed because the tool does not know where you will deploy the result. Pass the final public base URL to create correct deployment metadata:
+By default, copied canonical and `og:url` tags are removed because the deployment URL is unknown. Pass the final public base URL to write the correct metadata:
 
 ```bash
 wp-snapshot https://wordpress.example \
@@ -99,9 +113,19 @@ wp-snapshot https://wordpress.example \
   --public-url https://static.example/blog/
 ```
 
-## Private or protected source sites
+### Download public CDN assets
 
-Repeat `--header` when the source needs a request header:
+Cross-origin assets stay remote by default. Download public CDN images, fonts, and other subresources with:
+
+```bash
+wp-snapshot https://example.com --external-assets
+```
+
+External pages are not crawled. Private and local cross-origin targets are still blocked unless `--allow-private-network` is also passed.
+
+### Read a protected source site
+
+Repeat `--header` when a staging site needs a request header:
 
 ```bash
 wp-snapshot https://staging.example \
@@ -109,40 +133,177 @@ wp-snapshot https://staging.example \
   --header 'Cookie: wordpress_logged_in=example'
 ```
 
-Authorization and cookie headers are never forwarded when an asset redirects to another origin. Headers are not written into the report.
+`Authorization`, `Cookie`, `Proxy-Authorization`, `X-API-Key`, and `X-Auth-Token` headers are removed after a request leaves the source origin. Header values are not written into the report.
+
+Command-line secrets may remain in shell history. Use a temporary shell session or another safe method for real credentials.
+
+## Output
+
+A typical result looks like this:
+
+```text
+snapshot/
+├── index.html
+├── about/
+│   └── index.html
+├── 404.html
+├── wp-content/
+│   └── ...
+├── .nojekyll
+├── .wp-snapshot-output
+└── wp-snapshot.json
+```
+
+Links use explicit relative file references. For example, `/about/` can become `./about/index.html`. The `.wp-snapshot-output` marker protects future `--clean` runs.
+
+Use an HTTP server when testing. Plain pages may open through `file://`, but ES modules, manifests, service workers, `fetch()`, and other browser features usually need HTTP.
+
+## WordPress verification
+
+The preflight follows the [official WordPress REST API discovery method](https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/).
+
+It checks, in order:
+
+1. The `rel="https://api.w.org/"` HTTP `Link` header.
+2. The matching HTML `<link>` element.
+3. The standard `/wp-json/` API root.
+4. The plain-permalink `?rest_route=/` API root.
+
+The returned index must contain the core `wp/v2` namespace and routes. An advertised API root returning a WordPress-shaped `rest_*` 401 or 403 response is also accepted as a protected WordPress site.
+
+`wp-admin` is not used for detection. A login path or redirect is not a reliable WordPress signal.
+
+If a security plugin or firewall hides the REST API, and you already know the source is WordPress, skip only this check:
+
+```bash
+wp-snapshot https://wordpress.example --skip-wordpress-check
+```
+
+An unverified source fails with `E_NOT_WORDPRESS` before robots, sitemaps, linked pages, or assets are crawled.
+
+## What it captures
+
+- Server-rendered posts, pages, archives, and pagination found in links or sitemaps
+- Pretty permalinks and query permalinks such as `?p=42`
+- A usable WordPress 404 response as `404.html`, when available
+- Discovered theme, plugin, upload, and WordPress core assets
+- Images from `src`, `srcset`, and common lazy-loading attributes
+- Stylesheets, nested CSS imports, fonts, CSS images, scripts, icons, media, and web manifests
+- Import maps plus URL-like static and string-based dynamic ES module imports
+- Redirect destinations, fragments, `<base href>`, inline styles, and cache-busting query strings
+- Public cross-origin subresources when `--external-assets` is enabled
+
+The crawler reads native `/wp-sitemap.xml`, plain-permalink `?sitemap=index`, sitemap URLs from `robots.txt`, and common sitemap plugin locations. Discovered same-origin assets are captured within the configured asset and byte limits.
+
+## Limitations
+
+The output contains static files. PHP and MySQL are not copied.
+
+- Comments, search, login, preview links, and forms still need a live server.
+- WooCommerce carts, checkout, and other session-based features remain dynamic.
+- Admin AJAX and REST-driven blocks can still depend on the original site.
+- Content rendered only after browser JavaScript runs is not discovered automatically.
+- Calculated imports, worker URLs, service workers, and runtime API calls may need manual work.
+- Bare package imports such as `react` are not rewritten.
+- Cross-origin resources remain live unless `--external-assets` captures them.
+- A redirect is followed and discovered links point to the final file, but no static redirect rule or alias file is created.
+
+Known dynamic and admin URLs are not crawled. Form actions stay pointed at the source. Remaining live URLs are listed in `wp-snapshot.json`.
+
+## Output and network safety
+
+- `robots.txt` rules are applied to discovered same-origin pages by default.
+- External asset capture is opt-in.
+- Private-network cross-origin requests are blocked by default.
+- Individual and total response sizes have limits.
+- Recognized credential-like query parameters are redacted from the deployable report.
+- Abort signals remove staging output instead of committing a partial snapshot.
+- Output paths are protected against file, directory, prefix, and case-folding collisions.
+
+With `--strict`, crawling completes but the export fails and staged output is not committed if a discovered request failed. Parser warnings and intentionally skipped resources do not trigger strict failure.
 
 ## JavaScript API
 
-The API is ESM-only.
+The API is ESM-only and includes TypeScript declarations.
 
 ```js
-import { snapshot } from 'wp-snapshot';
+import { snapshot, SnapshotError } from 'wp-snapshot';
 
-const result = await snapshot({
-  url: 'https://example.com',
-  outputDir: './snapshot',
-  clean: true,
-});
+try {
+  const result = await snapshot({
+    url: 'https://example.com',
+    outputDir: './snapshot',
+    clean: true,
+    publicUrl: 'https://static.example/blog/',
+  });
 
-console.log(result.pages, result.assets, result.outputDir);
+  console.log(result.pages, result.assets, result.outputDir);
+} catch (error) {
+  if (error instanceof SnapshotError) {
+    console.error(error.code, error.message);
+  } else {
+    throw error;
+  }
+}
 ```
 
-The returned result includes captured resources, skipped URLs, failures, warnings, and live dependencies. TypeScript declarations are included.
+The result includes captured resources, skipped URLs, failures, warnings, live dependencies, byte totals, redirect totals, and the report path.
+
+The library exposes the snapshot behavior used by the CLI, plus a few lower-level options:
+
+| Option | Default | Purpose |
+| --- | ---: | --- |
+| `maxQueryVariants` | `25` | Limit query variants for one path |
+| `maxResourceBytes` | `50 MiB` | Limit one captured response |
+| `maxTotalBytes` | `1 GiB` | Limit the complete snapshot |
+| `maxRedirects` | `10` | Limit redirects for one request |
+| `signal` | none | Cancel with an `AbortSignal` |
+| `onProgress` | no-op | Receive capture and failure events |
+
+See [`src/index.d.ts`](src/index.d.ts) for the complete API contract.
 
 ## Report
 
-Every run writes `wp-snapshot.json` inside the output folder. It includes:
+By default, every successful run writes `wp-snapshot.json` inside the output directory. It includes:
 
-- source and generated time
+- source URL, deployment URL, and generation time
 - WordPress verification method and discovered REST API root
-- page, asset, redirect, and byte totals
-- the source URL and local path for each captured resource
-- skipped dynamic or out-of-scope URLs
-- failed requests and parser warnings
-- live URLs still used by forms or runtime code
+- page, asset, redirect, failure, skip, and byte totals
+- source URL and local path for each captured resource
+- skipped and failed requests
+- parser warnings
+- remaining live dependencies
 
-Run with `--strict` when a failed discovered resource should stop the export. Run with `--no-report` if you do not want the report in the deployed folder.
+Use `--no-report` when you do not want the report in the deployed directory.
+
+## Development
+
+```bash
+git clone https://github.com/f/wp-snapshot.git
+cd wp-snapshot
+npm ci
+npm run verify
+```
+
+`npm run verify` runs the behavior and integration tests, then checks JavaScript syntax, package metadata, ESM types, and the packed npm artifact. Use `npm test` for a faster test-only run while working.
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+- Open an [issue](https://github.com/f/wp-snapshot/issues) for bugs, edge cases, or larger changes.
+- Add a focused test when changing crawling, URL mapping, rewriting, or safety behavior.
+- Run `npm run verify` before opening a pull request.
+- Do not commit generated snapshots, credentials, or private source URLs.
+
+Please keep bug reports reproducible. If the source site is private, create a small local fixture instead of posting access details.
+
+## Project links
+
+- [npm package](https://www.npmjs.com/package/wp-snapshot)
+- [Issue tracker](https://github.com/f/wp-snapshot/issues)
+- [Changelog](CHANGELOG.md)
 
 ## License
 
-MIT
+[MIT](LICENSE) © Fatih
