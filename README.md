@@ -306,4 +306,4 @@ Please keep bug reports reproducible. If the source site is private, create a sm
 
 ## License
 
-[MIT](LICENSE) © Fatih
+[MIT](LICENSE) © fka.dev
