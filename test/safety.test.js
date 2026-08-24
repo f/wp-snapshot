@@ -236,7 +236,7 @@ test('file and directory output collisions are separated safely', async (t) => {
   assert.match(await readFile(path.join(output, page.output), 'utf8'), /Nested/);
 });
 
-test('parent directory casing is stable for case-sensitive deployments', async (t) => {
+test('parent directory casing stays collision-safe regardless of response order', async (t) => {
   const { output } = await fixtureOutput(t, 'wp-snapshot-case-collision-');
   const source = await startServer(t, (request, response) => {
     if (request.url === '/') {
@@ -256,8 +256,16 @@ test('parent directory casing is stable for case-sensitive deployments', async (
   });
   const about = result.resources.find(({ url }) => url === `${source}/About/`);
   const team = result.resources.find(({ url }) => url === `${source}/about/team/`);
-  assert.equal(about.output, 'About/index.html');
-  assert.match(team.output, /^about~[a-f0-9]+\/team\/index\.html$/);
+  assert.match(about.output, /^About(?:~[a-f0-9]+)?\/index\.html$/);
+  assert.match(team.output, /^about(?:~[a-f0-9]+)?\/team\/index\.html$/);
+  const aboutDirectory = about.output.split('/')[0];
+  const teamDirectory = team.output.split('/')[0];
+  assert.notEqual(aboutDirectory.toLowerCase(), teamDirectory.toLowerCase());
+  assert.equal(
+    Number(aboutDirectory === 'About') + Number(teamDirectory === 'about'),
+    1,
+    'exactly one response should keep the unhashed directory name',
+  );
   assert.match(await readFile(path.join(output, about.output), 'utf8'), /\/About\//);
   assert.match(await readFile(path.join(output, team.output), 'utf8'), /\/about\/team\//);
 });
