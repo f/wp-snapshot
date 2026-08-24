@@ -243,6 +243,28 @@ export function relativeFileReference(fromOutput, toOutput, fragment = '') {
   return `${relative || './index.html'}${fragment}`;
 }
 
+export function relativePageReference(fromOutput, toOutput, fragment = '') {
+  if (fromOutput === toOutput && fragment) return fragment;
+
+  const directoryIndex = toOutput === 'index.html'
+    ? '.'
+    : toOutput.endsWith('/index.html')
+      ? toOutput.slice(0, -'/index.html'.length)
+      : null;
+
+  if (directoryIndex === null) {
+    return relativeFileReference(fromOutput, toOutput, fragment);
+  }
+
+  let relative = path.posix.relative(path.posix.dirname(fromOutput), directoryIndex);
+  if (relative === '') relative = './';
+  else {
+    if (!relative.startsWith('.')) relative = `./${relative}`;
+    if (!relative.endsWith('/')) relative = `${relative}/`;
+  }
+  return `${relative}${fragment}`;
+}
+
 export function isInsideDirectory(root, target) {
   const relative = path.relative(root, target);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);

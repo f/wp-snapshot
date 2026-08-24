@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 - 2026-08-24
+
+- Keep captured directory-page links in trailing-slash form so nested relative links stay under the correct path on clean-URL hosts.
+- Apply the same directory-page handling to captured iframes while leaving asset paths unchanged.
+
 ## 0.1.1 - 2026-08-24
 
 - Expand the README with installation, CLI and API usage, WordPress verification, limitations, safety notes, and contribution instructions.

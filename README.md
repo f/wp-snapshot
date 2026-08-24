@@ -26,7 +26,7 @@ npx wp-snapshot https://example.com --output snapshot
 Test the result through a local HTTP server:
 
 ```bash
-npx serve snapshot
+npx http-server snapshot -a 127.0.0.1 -p 3000 -c-1 -d false
 ```
 
 Then deploy the `snapshot/` directory to your static host.
@@ -154,9 +154,9 @@ snapshot/
 └── wp-snapshot.json
 ```
 
-Links use explicit relative file references. For example, `/about/` can become `./about/index.html`. The `.wp-snapshot-output` marker protects future `--clean` runs.
+Captured page links use relative directory URLs. For example, `/about/` can become `./about/`. Asset links continue to use relative file paths. The `.wp-snapshot-output` marker protects future `--clean` runs.
 
-Use an HTTP server when testing. Plain pages may open through `file://`, but ES modules, manifests, service workers, `fetch()`, and other browser features usually need HTTP.
+Use an HTTP server when testing. The command above redirects real directories to their trailing-slash URLs without changing extensionless asset paths. Keep the trailing slash on directory page URLs, such as `/about/`, so nested relative links resolve from the correct directory.
 
 ## WordPress verification
 

@@ -125,7 +125,9 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
           srcset="images/hero-1x.jpg 1x, images/hero-2x.jpg 2x"
           data-lazy-src="images/lazy.jpg">
         <img id="external-image" src="${externalOrigin}/cdn/image.png">
+        <iframe id="internal-frame" src="../frame/"></iframe>
         <iframe id="external-frame" src="${externalOrigin}/embed/"></iframe>
+        <a id="download" href="../download/index.html">Download</a>
         <form action="../wp-comments-post.php"></form>
       </body>`);
       return;
@@ -141,6 +143,14 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
     }
     if (pathname === '/sitemap-only/') {
       html(response, '<body><img src="/wp-content/images/from-sitemap.png"></body>');
+      return;
+    }
+    if (pathname === '/frame/') {
+      html(response, '<body>Internal frame</body>');
+      return;
+    }
+    if (pathname === '/download/index.html') {
+      send(response, 200, 'application/pdf', Buffer.from('fixture-pdf'));
       return;
     }
     if (pathname === '/__wp_snapshot_missing_page__/') {
@@ -202,7 +212,7 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
   });
 
   assert.equal(result.failures.length, 0, JSON.stringify(result.failures, null, 2));
-  assert.equal(result.pages, 5, 'home, about, query, sitemap-only, and the 404 template');
+  assert.equal(result.pages, 6, 'home, about, query, sitemap-only, frame, and the 404 template');
   assert.ok(result.assets >= 15);
   assert.equal(result.redirects, 1);
   assert.equal(sourceHits.get('/legacy/'), 1);
@@ -225,15 +235,19 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
   const queryResource = resourceFor(result, `${sourceOrigin}/?p=42`);
   const stylesheetResource = resourceFor(result, `${sourceOrigin}/wp-content/theme/main.css?ver=1`);
   const externalImageResource = resourceFor(result, `${externalOrigin}/cdn/image.png`);
+  const downloadResource = resourceFor(result, `${sourceOrigin}/download/index.html`);
 
   assert.equal($('base').length, 0);
   assert.equal($('meta[charset]').attr('charset'), 'utf-8');
   assert.equal($('meta[property="og:url"]').attr('content'), 'https://static.example/blog/');
   assert.equal($('link[rel="canonical"]').attr('href'), 'https://static.example/blog/');
   assert.equal($('link[type="application/rss+xml"]').length, 0);
-  assert.equal($('#about').attr('href'), './about/index.html#team');
-  assert.equal($('#legacy').attr('href'), './about/index.html#history');
-  assert.equal($('#query').attr('href'), `./${queryResource.output}#answer`);
+  assert.equal($('#about').attr('href'), './about/#team');
+  assert.equal($('#legacy').attr('href'), './about/#history');
+  assert.equal(
+    $('#query').attr('href'),
+    `./${queryResource.output.slice(0, -'index.html'.length)}#answer`,
+  );
   assert.equal($('#external-page').attr('href'), `${externalOrigin}/elsewhere/`);
   assert.equal($('#search').attr('href'), `${sourceOrigin}/?s=term`);
   assert.equal($('#login').attr('href'), `${sourceOrigin}/wp-login.php`);
@@ -245,7 +259,10 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
   );
   assert.equal($('#hero').attr('data-lazy-src'), './content/images/lazy.jpg');
   assert.equal($('#external-image').attr('src'), `./${externalImageResource.output}`);
+  assert.equal($('#internal-frame').attr('src'), './frame/');
   assert.equal($('#external-frame').attr('src'), `${externalOrigin}/embed/`);
+  assert.equal(downloadResource.kind, 'asset');
+  assert.equal($('#download').attr('href'), './download/index.html');
   assert.equal($('form').attr('action'), `${sourceOrigin}/wp-comments-post.php`);
   assert.equal($('link[rel="stylesheet"]').attr('href'), `./${stylesheetResource.output}`);
   assert.equal($('link[rel="stylesheet"]').attr('integrity'), undefined);
@@ -272,7 +289,7 @@ test('snapshot crawls a WordPress-like site and makes the captured tree offline-
 
   const manifestResource = resourceFor(result, `${sourceOrigin}/site.webmanifest`);
   const manifest = JSON.parse(await readFile(path.join(outputDir, manifestResource.output), 'utf8'));
-  assert.equal(manifest.start_url, `./${queryResource.output}`);
+  assert.equal(manifest.start_url, `./${queryResource.output.slice(0, -'index.html'.length)}`);
   assert.equal(manifest.icons[0].src, './wp-content/images/icon.png');
 
   assert.equal(await readFile(path.join(outputDir, '404.html'), 'utf8').then((value) => value.includes('./wp-content/images/404.png')), true);

@@ -20,6 +20,7 @@ import {
   normalizeUrl,
   pageOutputPath,
   relativeFileReference,
+  relativePageReference,
 } from './url.js';
 
 const DEFAULT_USER_AGENT = `wp-snapshot/${VERSION} (+https://www.npmjs.com/package/wp-snapshot)`;
@@ -1173,7 +1174,11 @@ function rewriteReference(state, fromRecord, raw, relation, base) {
   resolved.hash = '';
   const normalized = normalizeUrl(resolved);
   const target = normalized ? resolveCaptured(state, normalized.href) : null;
-  if (target) return relativeFileReference(fromRecord.outputPath, target.outputPath, fragment);
+  if (target) {
+    const pageNavigation = target.kind === 'html' && (relation === 'page' || relation === 'iframe');
+    const createReference = pageNavigation ? relativePageReference : relativeFileReference;
+    return createReference(fromRecord.outputPath, target.outputPath, fragment);
+  }
 
   if (state.primaryOrigins.has(resolved.origin) || relation === 'asset' || relation === 'stylesheet') {
     state.liveDependencies.add(resolved.href);

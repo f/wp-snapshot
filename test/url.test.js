@@ -10,6 +10,7 @@ import {
   normalizeUrl,
   pageOutputPath,
   relativeFileReference,
+  relativePageReference,
   shortHash,
 } from '../src/url.js';
 
@@ -114,4 +115,24 @@ test('relativeFileReference produces offline-safe links and preserves fragments'
   assert.equal(relativeFileReference('posts/one/index.html', 'index.html'), '../../index.html');
   assert.equal(relativeFileReference('posts/one/index.html', 'posts/two/index.html', '#reply'), '../two/index.html#reply');
   assert.equal(relativeFileReference('about/index.html', 'about/index.html', '#team'), '#team');
+});
+
+test('relativePageReference keeps directory-index links on trailing-slash URLs', () => {
+  assert.equal(relativePageReference('index.html', 'blog/index.html'), './blog/');
+  assert.equal(relativePageReference('blog/index.html', 'blog/post/index.html'), './post/');
+  assert.equal(relativePageReference('posts/one/index.html', 'index.html'), '../../');
+  assert.equal(relativePageReference('posts/one/index.html', 'posts/two/index.html', '#reply'), '../two/#reply');
+  assert.equal(relativePageReference('about/index.html', 'about/index.html'), './');
+  assert.equal(relativePageReference('about/index.html', 'about/index.html', '#team'), '#team');
+  assert.equal(relativePageReference('index.html', 'privacy.html'), './privacy.html');
+
+  const blogUrl = new URL(
+    relativePageReference('index.html', 'blog/index.html'),
+    'http://localhost:3000/',
+  );
+  assert.equal(blogUrl.href, 'http://localhost:3000/blog/');
+  assert.equal(
+    new URL(relativePageReference('blog/index.html', 'blog/post/index.html'), blogUrl).href,
+    'http://localhost:3000/blog/post/',
+  );
 });
