@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-08-24
+
+- Expand the README with installation, CLI and API usage, WordPress verification, limitations, safety notes, and contribution instructions.
+- Include repository, issue tracker, and homepage links in the npm package metadata.
+- Stabilize the concurrent output-collision test.
+- Update the GitHub Actions used by CI.
+
 ## 0.1.0 - 2026-08-24
 
 - First release.
